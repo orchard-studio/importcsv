@@ -29,8 +29,7 @@ jQuery(function($){
     if(totalEntries > 0)
     {
         importRows(0);
-    }
-
+    }	
 });
 
 /**
@@ -47,7 +46,9 @@ function importRows(nr)
     fields['section-id'] = sectionID;
     fields['row'] = currentRow;
     fields['field-ids'] = fieldIDs;
-    jQuery.ajax({
+	var importURL = Symphony.Context.get('symphony')+ '/extension/importcsv/';
+	
+    var request = jQuery.ajax({
         url: importURL,
         async: true,
         type: 'post',
@@ -77,8 +78,10 @@ function importRows(nr)
             jQuery("div.console").attr({ scrollTop: jQuery("div.console").attr("scrollHeight") });
         }
     });
+	
 
 }
+
 
 /**
  * Get a variable from the HTML code

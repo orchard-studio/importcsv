@@ -5,6 +5,8 @@
 <!--
         <h2>Import / Export CSV</h2>
 -->
+		
+		<input type="hidden" name="MAX_FILE_SIZE" value="2454565000000" />
         <xsl:if test="data/@multilanguage">
             <ul class="importer-nav">
                 <li>
@@ -21,12 +23,8 @@
             <p>This is the default import/export tool. It allows you to import and export entire sections.</p>
             <fieldset class="left">
                 <h3>Import CSV</h3>
-                <p>Select a CSV file to upload:</p>
-                <label>
-                    <input name="csv-file" type="file"/>
-                </label>
-                <p>Select a section as target:</p>
-                <label>
+				<label> 
+					<p>Select a section as target:</p>
                     <select name="section" class="small">
                         <xsl:for-each select="data/sections/section">
                             <option value="{@id}">
@@ -35,6 +33,12 @@
                         </xsl:for-each>
                     </select>
                 </label>
+                <p>Select a CSV file to upload:</p>
+                <label>
+					<input name="csv-file" type="file"/>					
+                </label>
+               
+                
                 <p>Don't worry, going to the next step won't import anything yet.</p>
                 <input name="import-step-2" type="submit" value="Next step"/>
             </fieldset>

@@ -5,9 +5,13 @@ require_once(TOOLKIT . '/class.sectionmanager.php');
 require_once(TOOLKIT . '/class.fieldmanager.php');
 require_once(TOOLKIT . '/class.entrymanager.php');
 require_once(TOOLKIT . '/class.entry.php');
+require_once(BOOT . '/func.utilities.php');
+require_once(EXTENSIONS . '/importcsv/lib/php-export-data/php-export-data.class.php');
 require_once(EXTENSIONS . '/importcsv/lib/parsecsv-0.3.2/parsecsv.lib.php');
 require_once(CORE . '/class.cacheable.php');
+//ini_set('max_execution_time', 0);
 
+ini_set('upload_max_filesize','70M');
 class contentExtensionImportcsvIndex extends AdministrationPage
 {
 
@@ -21,24 +25,30 @@ class contentExtensionImportcsvIndex extends AdministrationPage
 
     public function build()
     {
-        parent::build();
-        parent::addStylesheetToHead(URL . '/extensions/importcsv/assets/importcsv.css');
-        // parent::addStylesheetToHead(URL . '/symphony/assets/forms.css');
+        parent::build();        
+		parent::addStylesheetToHead(URL . '/extensions/importcsv/assets/importcsv.css');
+		
         parent::addScriptToHead(URL.'/extensions/importcsv/assets/importcsv.js', 70);
-        $this->setTitle('Symphony - Import / export CSV');
+        
+		$this->setTitle('Symphony - Import / export CSV');
         $this->Context->appendChild(new XMLElement('h2', __('Import / Export CSV')));
     }
 
 
     public function view()
-    {
+    {	
+	
         if (isset($_POST['import-step-2']) && $_FILES['csv-file']['name'] != '') {
+			
             // Import step 2:
             $this->__importStep2Page();
         } elseif (isset($_POST['import-step-3'])) {
             // Import step 3:
-            $this->__importStep3Page();
-        } elseif (isset($_REQUEST['export'])) {
+            $this->__importStep3Page();        
+		} elseif( isset($_REQUEST['section'])){
+			$this->__ajaxexport();
+		}
+		elseif (isset($_REQUEST['export'])) {
             // Export:
             $this->__exportPage();
         } elseif (isset($_POST['ajax'])) {
@@ -93,7 +103,7 @@ class contentExtensionImportcsvIndex extends AdministrationPage
         $xslt = new XSLTPage();
         $xslt->setXML($xml->generate());
         $xslt->setXSL(EXTENSIONS . '/importcsv/content/index.xsl', true);
-        $this->Form->setValue($xslt->generate());
+        $this->Form->setValue($xslt->generate());				
         $this->Form->setAttribute('enctype', 'multipart/form-data');
     }
 
@@ -101,26 +111,53 @@ class contentExtensionImportcsvIndex extends AdministrationPage
      * Get the CSV object as it is stored in the database.
      * @return bool|mixed   the CSV object on success, false on failure
      */
-    private function __getCSV()
+    private function __getCSV($csv)
     {
-        $cache = new Cacheable(Symphony::Database());
+		$fname = EXTENSIONS.'/importcsv/content/data.json';
+		if($csv){			
+			if(file_exists($fname)){
+				unlink($fname);
+			}
+			
+			file_put_contents($fname,json_encode($csv->data));
+		}else{
+			$data = file_get_contents($fname);
+			$content = json_decode($data);
+			$container->titles = $content[0];
+			$container->data = $content;
+			
+		
+			return $container;
+		}
+		
+        /*$cache = new Cacheable(Symphony::Database());
         $data = $cache->check('importcsv');
         if ($data != false) {
             return unserialize($data['data']);
         } else {
             return false;
-        }
+        }*/
+		
     }
-
+	
+	
+	
+	
+	
+	
     private function __importStep2Page()
     {
         // Store the CSV data in the cache table, so the CSV file will not be stored on the server
-        $cache = new Cacheable(Symphony::Database());
+		
+        ///$cache = new Cacheable(Symphony::Database());
         // Get the nodes provided by this CSV file:
+		
         $csv = new parseCSV();
         $csv->auto($_FILES['csv-file']['tmp_name']);
-        $cache->write('importcsv', serialize($csv), 60 * 60 * 24); // Store for one day
-
+		
+        ///$cache->write('importcsv', serialize($csv), 60 * 60 * 24); // Store for one day
+		$this->__getCSV($csv);
+		
         $sectionID = $_POST['section'];
 
         // Generate the XML:
@@ -142,8 +179,7 @@ class contentExtensionImportcsvIndex extends AdministrationPage
         {
             $csvNode->appendChild(new XMLElement('key', $key));
         }
-        $xml->appendChild($csvNode);
-
+        $xml->appendChild($csvNode);					
         // Generate the HTML:
         $xslt = new XSLTPage();
         $xslt->setXML($xml->generate());
@@ -167,9 +203,9 @@ class contentExtensionImportcsvIndex extends AdministrationPage
         $countUpdated = 0;
         $countIgnored = 0;
         $countOverwritten = 0;
-        $fm = new FieldManager($this);
-        $csv = $this->__getCSV();
-
+        $fm = new FieldManager($this);		
+        $csv = $this->__getCSV(false);
+		
         // Load the information to start the importing process:
         $this->__addVar('section-id', $sectionID);
         $this->__addVar('unique-action', $uniqueAction);
@@ -178,6 +214,7 @@ class contentExtensionImportcsvIndex extends AdministrationPage
 
         // Output the CSV-data:
         $csvData = $csv->data;
+		
         $csvTitles = $csv->titles;
         $this->__addVar('total-entries', count($csvData));
 
@@ -229,7 +266,8 @@ class contentExtensionImportcsvIndex extends AdministrationPage
         $updated = array();
         $ignored = array();
 
-        $csv = $this->__getCSV();
+        $csv = $this->__getCSV(false);
+		
         if ($csv != false) {
             // Load the drivers:
             $drivers = $this->getDrivers();
@@ -256,12 +294,13 @@ class contentExtensionImportcsvIndex extends AdministrationPage
                 // Start by creating a new entry:
                 $entry = new Entry($this);
                 $entry->set('section_id', $sectionID);
-
+				
                 // Ignore this entry?
                 $ignore = false;
 
                 // Import this row:
                 $row = $csvData[$i];
+				
                 if ($row != false) {
 
                     // If a unique field is used, make sure there is a field selected for this:
@@ -276,9 +315,11 @@ class contentExtensionImportcsvIndex extends AdministrationPage
                         $type = $field->get('type');
                         if (isset($drivers[$type])) {
                             $drivers[$type]->setField($field);
+							
                             $entryID = $drivers[$type]->scanDatabase($row[$csvTitles[$uniqueField]]);
                         } else {
                             $drivers['default']->setField($field);
+							
                             $entryID = $drivers['default']->scanDatabase($row[$csvTitles[$uniqueField]]);
                         }
 
@@ -302,7 +343,7 @@ class contentExtensionImportcsvIndex extends AdministrationPage
                             }
                         }
                     }
-
+				
                     if (!$ignore) {
                         // Do the actual importing:
                         $j = 0;
@@ -324,13 +365,15 @@ class contentExtensionImportcsvIndex extends AdministrationPage
                                     $data = $drivers['default']->import($value, $entryID);
                                 }
                                 // Set the data:
+							
                                 if ($data != false) {
                                     $entry->setData($fieldID, $data);
                                 }
                             }
+													
                             $j++;
                         }
-
+						
                         // Store the entry:
                         $entry->commit();
                     }
@@ -339,7 +382,7 @@ class contentExtensionImportcsvIndex extends AdministrationPage
         } else {
             die(__('[ERROR: CSV Data not found!]'));
         }
-
+		
         if (count($updated) > 0) {
             $messageSuffix .= ' ' . __('(updated: ') . implode(', ', $updated) . ')';
         }
@@ -349,32 +392,33 @@ class contentExtensionImportcsvIndex extends AdministrationPage
 
         die('[OK]' . $messageSuffix);
     }
-
+	
+	
     private function __exportPage()
     {
         // Load the drivers:
         $drivers = $this->getDrivers();
 
         // Get the fields of this section:
-        $sectionID = $_REQUEST['section-export'];
+		if(isset($_REQUEST['section-export']) ){
+			$sectionID = $_REQUEST['section-export'];
+		}else{
+			$sectionID = $_REQUEST['q'];
+		}
+        
         $sm = new SectionManager($this);
         $em = new EntryManager($this);
         $section = $sm->fetch($sectionID);
         $fileName = $section->get('handle') . '_' . date('Y-m-d') . '.csv';
         $fields = $section->fetchFields();
-
+		
         $headers = array();
         foreach ($fields as $field)
-        {
-            $headers[] = '"' . str_replace('"', '""', $field->get('label')) . '"';
+        {			
+            $headers[] = '"' . str_replace('"', '""', $field->get('label')) . '"';		
         }
-
-        header('Content-type: text/csv');
-        header('Content-Disposition: attachment; filename="' . $fileName . '"');
-
-        // Show the headers:
-        echo implode(';', $headers) . "\n";
-
+		
+     
          /*
          * Enable filtering!
          * Use the same filtering as with publish indexes (ie: ?filter=[field]:value)
@@ -413,38 +457,138 @@ class contentExtensionImportcsvIndex extends AdministrationPage
             }
 
         }
+		unset($_REQUEST);
         /*
          * End
          */
-
-        // Show the content:
-        $total = $em->fetchCount($sectionID,$where,$joins);
-        for($offset = 0; $offset < $total; $offset += 100)
-
-        {
-            $entries = $em->fetch(null, $sectionID, 100, $offset, $where, $joins);
-            foreach ($entries as $entry)
-            {
-                $line = array();
-                foreach ($fields as $field)
-                {
-                    $data = $entry->getData($field->get('id'));
-                    $type = $field->get('type');
-                    if (isset($drivers[$type])) {
-                        $drivers[$type]->setField($field);
-                        $value = $drivers[$type]->export($data, $entry->get('id'));
-                    } else {
-                        $drivers['default']->setField($field);
-                        $value = $drivers['default']->export($data, $entry->get('id'));
-                    }
-                    $line[] = '"' . str_replace('"', '""', trim($value)) . '"';
-                }
-                echo implode(';', $line) . "\r\n";
-            }
-        }
-        die();
+					
+        // Show the content:		
+		$file = $this->__checkFile($sectionID);		// success
+		$entries[] = $this->__getIDS($sectionID);		// works gets all entries successfully		
+		$data = $this->__grabAllEntries($entries,$fields);		
+		$data = array(
+			array_unique($data['field-columns']),
+			implode("\r\n",$data['entries'])			
+		);		
+		$this->__insert($file,$data);				
+		die();	
     }
-
+	
+	private function __checkFile($sectionID){			
+		$file = EXTENSIONS.'/importcsv/data/data-'.$sectionID.'.csv';
+		if(file_exists($file)){
+			unlink($file);
+		}
+		return $file;
+	}
+	
+	
+	
+	private function __getIDS($sectionID){
+		$ids = $this->__fetchIDS($sectionID);
+		
+		$em = new EntryManager($this);
+		$entries = array();
+		//$all = array();
+		//var_dump($ids);		
+		foreach($ids as $id => $i){
+			//$all[] = $i['id'];
+			
+			$entries[] = $em->fetch($i['id'], $sectionID);
+			
+			
+		}
+		
+		unset($ids);		
+		return $entries;
+	}
+	
+	private function __fetchIDS($sectionID){
+		Symphony::Database()->enableCaching();
+		$ids = Symphony::Database()->fetch("SELECT id FROM tbl_entries WHERE section_id='$sectionID'");			
+		return $ids;
+	}
+	
+	private function __grabAllEntries($entries,$fields){
+		$dat = array();
+		foreach($entries as $entry => $ents ){
+			
+			$dat = $this->__accessArray($ents);
+			unset($ents);
+		}		
+		$data = array(
+			'entries' => $dat['entries'],
+			'field-columns'=> $dat['fieldscols']
+		);	
+		unset($dat);
+		return $data;
+	}
+	
+	private function __accessArray($ents){
+		$entries = array();
+		$fieldscols = array();
+		foreach($ents as $entryobj ){
+					
+					$e = array_values( (array) $entryobj );																	
+					unset($entryobj);
+					$fieldscols[] = $this->__getField($fields);									
+					$entrys[] = implode(',',$this->__getValues($e[1]));
+					unset($e);		
+		}
+		unset($ents);
+		return array(
+			'entries' => $entries,
+			'fieldscols' => $fieldscols
+		);
+	}
+	
+	private function __getField($fields){
+		$r = array();		
+		foreach($fields as $field){	
+			
+			$f = array_values((array) $field);
+			
+			$r[] = $f[1]['label'];															
+			unset($f);
+		}				
+		$fieldscols = implode(',',$r)."\r\n";		
+		return $fieldscols;
+	}
+	
+	
+	
+	private function __getValues($array){		
+		$all = array();
+		$ents = array();
+		foreach($array as $en => $ent){
+			$data = $ent->getData();
+			$all = $this->getVals($data);
+			$ents[] = implode(',',$all);
+		}
+		$l = implode("\r\n",$ents);		
+		return $l;
+	}
+	
+	public function getData(){
+		return $this->_data;
+	}
+	
+	private function getVals($data){
+		$a = array();
+		foreach($data as $d => $dat){
+			$a[] = $dat['value'];
+		}
+		return $a;
+	}
+	
+	private function __insert($file,$array){
+		foreach($array as $data => $dat){				
+			file_put_contents($file, $dat, FILE_APPEND | LOCK_EX);			
+		}
+		unset($array);
+		unset($file);
+	}
+	
     private function __exportMultiLanguage()
     {
         // Get the ID of the field which values should be exported:

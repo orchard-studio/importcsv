@@ -450,7 +450,10 @@ class parseCSV {
 		}
 		
 		// create data
+		
+		
 		foreach( $data as $key => $row ) {
+			
 			foreach( $row as $field => $value ) {
 				$entry[] = $this->_enclose_value($value);
 			}

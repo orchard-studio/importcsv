@@ -8,7 +8,43 @@ table.import { border-collapse: collapse; cursor: pointer; margin-bottom: 1em; }
 table.import th, table.import td { text-align: left; border-bottom: 1px solid #ccc; padding: 3px 40px 3px 0; }
 table.import td, table.import th { padding: 3px; }
 table.import th.unique { width: 80px; }
-
+.container{
+	width:100%;
+	height:100%;
+	display:block;
+	position:fixed;
+	top:0;
+	left:0;
+	z-index:99999;
+	opacity:0.7;
+	background:#fff;
+	display:none;
+}
+.loader span{
+	
+	height:45px;
+	display:block;
+	float:left;
+	background:#22c346;
+	position:absolute;top:0;
+}
+.loader  p{
+	color:#fff;
+	font-size:14px;
+	position:relative;
+	z-index:1;
+}
+.loader{
+	border:2px solid #282828;	
+	border-radius:5px;
+	background:#fff;
+	width:50%;
+	position:fixed;
+	display:block;
+	top:15%;
+	left:25%;
+	height:45px;
+}
 option.dont-use { color: #800; }
 
 var { display: none; }
